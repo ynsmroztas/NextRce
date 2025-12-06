@@ -1,7 +1,7 @@
 # NextRce - Next.js RSC Exploit Tool (CVE-2025-55182)
 
 <div align="center">
-  <img src="https://github.com/ynsmroztas/NextRce/nextrce.jpg" alt="NextRce Logo" width="600px">
+  <img src="https://github.com/ynsmroztas/NextRce/blob/main/nextrce.jpg" alt="NextRce Logo" width="600px">
   <br><br>
 
   [![Python](https://img.shields.io/badge/Python-3.x-blue?style=for-the-badge&logo=python)](https://www.python.org/)
